@@ -1,0 +1,14 @@
+name = "bluelive-maps"
+main = "dist/index.mjs"
+compatibility_date = "2024-01-01"
+
+[build]
+command = "npm run build"
+
+[build.upload]
+format = "modules"
+
+[env.production]
+name = "bluelive-maps-prod"
+route = "your-domain.com/*"
+zone_id = "YOUR_ZONE_ID"
