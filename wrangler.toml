@@ -1,14 +1,10 @@
-name = "bluelive-maps"
+name = "blmap"
 main = "dist/index.mjs"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-11-01"
 
-[build]
-command = "npm run build"
+[assets]
+directory = "public"
+binding = "ASSETS"
 
-[build.upload]
-format = "modules"
-
-[env.production]
-name = "bluelive-maps-prod"
-route = "your-domain.com/*"
-zone_id = "YOUR_ZONE_ID"
+[ai]
+binding = "AI"
