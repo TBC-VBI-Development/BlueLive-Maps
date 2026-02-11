@@ -8,7 +8,7 @@ export interface Env {
 const router = Router();
 
 /* -----------------------------
-   API: Health Check
+   HEALTH CHECK
 ----------------------------- */
 router.get('/api/health', () => {
   return new Response('BlueLive Maps Worker OK', {
@@ -17,11 +17,23 @@ router.get('/api/health', () => {
 });
 
 /* -----------------------------
-   API: Place Search (AI)
+   SAFE JSON PARSER
+----------------------------- */
+function safeJsonParse(raw: any, fallback: any) {
+  try {
+    if (typeof raw === 'string') return JSON.parse(raw);
+    return raw;
+  } catch {
+    return fallback;
+  }
+}
+
+/* -----------------------------
+   PLACE SEARCH
 ----------------------------- */
 router.post('/api/search', async (request: Request, env: Env) => {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
 
     if (!body?.query) {
       return json({ error: 'Missing query' }, 400);
@@ -33,15 +45,23 @@ You are an AI assistant for a maps app called BlueLive Maps.
 User query: "${body.query}"
 User approximate location: lat=${body.latitude ?? 'unknown'}, lng=${body.longitude ?? 'unknown'}
 
-1. Infer what kind of places they want.
-2. Suggest 3–5 related search suggestions.
-3. Return 3–7 example places with:
+1. Suggest 3–5 related search suggestions.
+2. Provide 3–7 example places with:
    - name
-   - short description
+   - description
    - latitude
    - longitude
 
-Respond ONLY as JSON.
+Respond ONLY as JSON:
+{
+  "suggestions": string[],
+  "places": {
+    "name": string,
+    "description": string,
+    "latitude": number,
+    "longitude": number
+  }[]
+}
 `;
 
     const aiResponse = await env.AI.run(
@@ -56,18 +76,11 @@ Respond ONLY as JSON.
       }
     );
 
-    // SAFE JSON extraction
-    let raw =
-      typeof aiResponse === 'string'
-        ? aiResponse
-        : aiResponse?.response ?? '';
+    const raw = typeof aiResponse === 'string'
+      ? aiResponse
+      : aiResponse?.response ?? '';
 
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = { suggestions: [], places: [] };
-    }
+    const parsed = safeJsonParse(raw, { suggestions: [], places: [] });
 
     if (!Array.isArray(parsed.suggestions)) parsed.suggestions = [];
     if (!Array.isArray(parsed.places)) parsed.places = [];
@@ -80,11 +93,11 @@ Respond ONLY as JSON.
 });
 
 /* -----------------------------
-   API: 3D Model Generation (AI)
+   3D MODEL GENERATION
 ----------------------------- */
 router.post('/api/generate-model', async (request: Request, env: Env) => {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
 
     if (!body?.placeName) {
       return json({ error: 'Missing placeName' }, 400);
@@ -114,19 +127,13 @@ Return JSON:
       }
     );
 
-    let raw =
-      typeof aiResponse === 'string'
-        ? aiResponse
-        : aiResponse?.response ?? '';
+    const raw = typeof aiResponse === 'string'
+      ? aiResponse
+      : aiResponse?.response ?? '';
 
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = {
-        modelDescription: `A simple abstract 3D model representing ${body.placeName}.`
-      };
-    }
+    const parsed = safeJsonParse(raw, {
+      modelDescription: `A simple abstract 3D model representing ${body.placeName}.`
+    });
 
     if (typeof parsed.modelDescription !== 'string') {
       parsed.modelDescription = `A simple abstract 3D model representing ${body.placeName}.`;
@@ -144,7 +151,7 @@ Return JSON:
 });
 
 /* -----------------------------
-   CORS Preflight
+   CORS
 ----------------------------- */
 router.options('*', () =>
   new Response(null, {
@@ -154,14 +161,14 @@ router.options('*', () =>
 );
 
 /* -----------------------------
-   STATIC ASSET HANDLER
+   STATIC ASSETS (CATCH‑ALL)
 ----------------------------- */
 router.all('*', async (request: Request, env: Env) => {
   return env.ASSETS.fetch(request);
 });
 
 /* -----------------------------
-   JSON + CORS HELPERS
+   HELPERS
 ----------------------------- */
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -182,7 +189,7 @@ function corsHeaders() {
 }
 
 /* -----------------------------
-   WORKER EXPORT (must be async)
+   WORKER EXPORT
 ----------------------------- */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
