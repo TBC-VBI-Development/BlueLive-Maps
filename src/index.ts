@@ -69,17 +69,29 @@ Respond ONLY as JSON with:
       }
     );
 
-    let parsed;
-    try {
-      parsed = JSON.parse(aiResponse.response ?? aiResponse);
-    } catch {
-      parsed = {
-        suggestions: ['Popular places', 'Nearby landmarks'],
-        places: []
-      };
+    // SAFELY extract raw AI output
+    let raw = (aiResponse && typeof aiResponse === 'object' && 'response' in aiResponse)
+      ? aiResponse.response
+      : aiResponse;
+
+    let parsed: any;
+
+    if (!raw) {
+      parsed = { suggestions: [], places: [] };
+    } else {
+      try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        parsed = { suggestions: [], places: [] };
+      }
     }
 
+    // Guarantee valid structure
+    if (!Array.isArray(parsed.suggestions)) parsed.suggestions = [];
+    if (!Array.isArray(parsed.places)) parsed.places = [];
+
     return json(parsed);
+
   } catch (err: any) {
     return json({ error: err?.message ?? 'Search failed' }, 500);
   }
@@ -124,13 +136,21 @@ The description should talk about basic shapes (boxes, cylinders, spheres), colo
       }
     );
 
-    let parsed;
+    let raw = (aiResponse && typeof aiResponse === 'object' && 'response' in aiResponse)
+      ? aiResponse.response
+      : aiResponse;
+
+    let parsed: any;
     try {
-      parsed = JSON.parse(aiResponse.response ?? aiResponse);
+      parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch {
       parsed = {
         modelDescription: `A simple abstract 3D model representing ${body.placeName}.`
       };
+    }
+
+    if (typeof parsed.modelDescription !== 'string') {
+      parsed.modelDescription = `A simple abstract 3D model representing ${body.placeName}.`;
     }
 
     return json({
@@ -138,6 +158,7 @@ The description should talk about basic shapes (boxes, cylinders, spheres), colo
       placeName: body.placeName,
       generatedAt: new Date().toISOString()
     });
+
   } catch (err: any) {
     return json({ error: err?.message ?? 'Model generation failed' }, 500);
   }
@@ -155,7 +176,6 @@ router.options('*', () =>
 
 /* -----------------------------
    STATIC ASSET HANDLER (CATCH‑ALL)
-   — must be LAST route
 ----------------------------- */
 router.all('*', async (request: Request, env: Env) => {
   return env.ASSETS.fetch(request);
@@ -183,10 +203,10 @@ function corsHeaders() {
 }
 
 /* -----------------------------
-   WORKER EXPORT
+   WORKER EXPORT (FIXED)
 ----------------------------- */
 export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     return router.handle(request, env, ctx);
   }
 };
