@@ -1,4 +1,4 @@
-name = "bluelive-maps"
+name = "blmap"
 main = "dist/index.mjs"
 compatibility_date = "2024-01-01"
 
