@@ -1,8 +1,8 @@
 import { Router } from 'itty-router';
 
 export interface Env {
-  AI: any;        // Cloudflare Workers AI binding
-  ASSETS: Fetcher; // Static assets binding from wrangler.toml
+  AI: any;
+  ASSETS: Fetcher;
 }
 
 const router = Router();
@@ -21,13 +21,9 @@ router.get('/api/health', () => {
 ----------------------------- */
 router.post('/api/search', async (request: Request, env: Env) => {
   try {
-    const body = await request.json() as {
-      query: string;
-      latitude?: number;
-      longitude?: number;
-    };
+    const body = await request.json();
 
-    if (!body.query) {
+    if (!body?.query) {
       return json({ error: 'Missing query' }, 400);
     }
 
@@ -42,19 +38,10 @@ User approximate location: lat=${body.latitude ?? 'unknown'}, lng=${body.longitu
 3. Return 3–7 example places with:
    - name
    - short description
-   - latitude (approximate)
-   - longitude (approximate)
+   - latitude
+   - longitude
 
-Respond ONLY as JSON with:
-{
-  "suggestions": string[],
-  "places": {
-    "name": string,
-    "description": string,
-    "latitude": number,
-    "longitude": number
-  }[]
-}
+Respond ONLY as JSON.
 `;
 
     const aiResponse = await env.AI.run(
@@ -69,24 +56,19 @@ Respond ONLY as JSON with:
       }
     );
 
-    // SAFELY extract raw AI output
-    let raw = (aiResponse && typeof aiResponse === 'object' && 'response' in aiResponse)
-      ? aiResponse.response
-      : aiResponse;
+    // SAFE JSON extraction
+    let raw =
+      typeof aiResponse === 'string'
+        ? aiResponse
+        : aiResponse?.response ?? '';
 
-    let parsed: any;
-
-    if (!raw) {
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
       parsed = { suggestions: [], places: [] };
-    } else {
-      try {
-        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      } catch {
-        parsed = { suggestions: [], places: [] };
-      }
     }
 
-    // Guarantee valid structure
     if (!Array.isArray(parsed.suggestions)) parsed.suggestions = [];
     if (!Array.isArray(parsed.places)) parsed.places = [];
 
@@ -102,26 +84,22 @@ Respond ONLY as JSON with:
 ----------------------------- */
 router.post('/api/generate-model', async (request: Request, env: Env) => {
   try {
-    const body = await request.json() as {
-      placeName: string;
-      description?: string;
-    };
+    const body = await request.json();
 
-    if (!body.placeName) {
+    if (!body?.placeName) {
       return json({ error: 'Missing placeName' }, 400);
     }
 
     const prompt = `
-You describe a simple 3D model concept for a place.
+Describe a simple 3D model concept for this place:
 
-Place name: ${body.placeName}
-Description: ${body.description ?? 'No extra description'}
+Name: ${body.placeName}
+Description: ${body.description ?? 'No description'}
 
 Return JSON:
 {
   "modelDescription": string
 }
-The description should talk about basic shapes (boxes, cylinders, spheres), colors, and rough layout.
 `;
 
     const aiResponse = await env.AI.run(
@@ -136,13 +114,14 @@ The description should talk about basic shapes (boxes, cylinders, spheres), colo
       }
     );
 
-    let raw = (aiResponse && typeof aiResponse === 'object' && 'response' in aiResponse)
-      ? aiResponse.response
-      : aiResponse;
+    let raw =
+      typeof aiResponse === 'string'
+        ? aiResponse
+        : aiResponse?.response ?? '';
 
-    let parsed: any;
+    let parsed;
     try {
-      parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      parsed = JSON.parse(raw);
     } catch {
       parsed = {
         modelDescription: `A simple abstract 3D model representing ${body.placeName}.`
@@ -175,7 +154,7 @@ router.options('*', () =>
 );
 
 /* -----------------------------
-   STATIC ASSET HANDLER (CATCH‑ALL)
+   STATIC ASSET HANDLER
 ----------------------------- */
 router.all('*', async (request: Request, env: Env) => {
   return env.ASSETS.fetch(request);
@@ -203,7 +182,7 @@ function corsHeaders() {
 }
 
 /* -----------------------------
-   WORKER EXPORT (FIXED)
+   WORKER EXPORT (must be async)
 ----------------------------- */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
